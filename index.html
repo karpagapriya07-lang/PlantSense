@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>PlantSense – Jasmine Smart Care</title>
+
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background: #e8f5e9;
+      color: #1b5e20;
+      transition: 0.3s;
+    }
+
+    body.dark {
+      background: #121212;
+      color: #e0ffe0;
+    }
+
+    h1 {
+      text-align: center;
+      color: #2e7d32;
+    }
+
+    .jasmine {
+      text-align: center;
+      font-size: 26px;
+      font-weight: bold;
+    }
+
+    .info {
+      background: #c8e6c9;
+      padding: 15px;
+      border-radius: 10px;
+      margin: 20px auto;
+      max-width: 900px;
+    }
+
+    body.dark .info {
+      background: #1e1e1e;
+    }
+
+    .controls {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    button {
+      padding: 10px 15px;
+      margin: 5px;
+      border: none;
+      border-radius: 6px;
+      background: #2e7d32;
+      color: white;
+      cursor: pointer;
+    }
+
+    .dashboard {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 15px;
+      max-width: 1000px;
+      margin: auto;
+    }
+
+    .card {
+      background: #a5d6a7;
+      padding: 15px;
+      border-radius: 10px;
+      text-align: center;
+      font-weight: bold;
+    }
+
+    body.dark .card {
+      background: #1f1f1f;
+    }
+
+    canvas {
+      max-width: 900px;
+      margin: 30px auto;
+      display: block;
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- TOP CONTENT -->
+  <div class="jasmine">🌼 Jasmine Smart Care System</div>
+  <h1>PlantSense – IoT + AI Monitoring</h1>
+
+  <div class="info">
+    <h2 id="j_title">🌱 How to Grow Jasmine</h2>
+    <p id="j_content">
+      Jasmine grows well in moist soil with good sunlight.
+      This smart system monitors soil moisture, light intensity,
+      temperature and humidity using IoT sensors.
+    </p>
+  </div>
+
+  <div class="controls">
+    <button onclick="toggleMode()">🌗 Dark / Light</button>
+    <button onclick="toggleLang()">🌐 Tamil / English</button>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div class="dashboard">
+    <div class="card">Soil Moisture<br><span id="soil">--</span>%</div>
+    <div class="card">Light Intensity<br><span id="light">--</span>%</div>
+    <div class="card">Temperature<br><span id="temp">--</span>°C</div>
+    <div class="card">Humidity<br><span id="hum">--</span>%</div>
+    <div class="card">Plant Status<br><span id="status">--</span></div>
+    <div class="card">AI Prediction<br><span id="ai">--</span></div>
+    <div class="card">Date<br><span id="date">--</span></div>
+    <div class="card">Time<br><span id="time">--</span></div>
+  </div>
+
+  <!-- GRAPH -->
+  <canvas id="chart"></canvas>
+
+  <script>
+    /* ---------------- FIREBASE CONFIG ---------------- */
+    var firebaseConfig = {
+      databaseURL: "https://plant-iot-13da8-default-rtdb.firebaseio.com/"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    var db = firebase.database();
+
+    /* ---------------- CHART ---------------- */
+    const ctx = document.getElementById("chart").getContext("2d");
+
+    const chart = new Chart(ctx, {
+      type: "line",
+      data: {
+        labels: [],
+        datasets: [
+          {
+            label: "Soil %",
+            data: [],
+            borderWidth: 2,
+            borderColor: "green",
+            tension: 0.4
+          },
+          {
+            label: "Light %",
+            data: [],
+            borderWidth: 2,
+            borderColor: "orange",
+            tension: 0.4
+          }
+        ]
+      }
+    });
+
+    /* ---------------- REALTIME DATA ---------------- */
+    db.ref("sensorData").on("value", snap => {
+      const d = snap.val();
+      if (!d) return;
+
+      document.getElementById("soil").innerText = d.soil_percent;
+      document.getElementById("light").innerText = d.light_percent;
+      document.getElementById("temp").innerText = d.temperature;
+      document.getElementById("hum").innerText = d.humidity;
+
+      /* STATUS LOGIC */
+      let status = "Healthy 🌱";
+
+      if (d.soil_percent < 30) status = "Dry 🚱";
+      if (d.light_percent < 30) status = "Low Light 🌙";
+
+      document.getElementById("status").innerText = status;
+
+      /* AI HEALTH SCORE */
+      let score = 100;
+      if (d.soil_percent < 30) score -= 40;
+      if (d.light_percent < 30) score -= 30;
+
+      document.getElementById("ai").innerText =
+        score + "% Plant Health";
+
+      /* UPDATE GRAPH */
+      const t = new Date().toLocaleTimeString();
+
+      chart.data.labels.push(t);
+      chart.data.datasets[0].data.push(d.soil_percent);
+      chart.data.datasets[1].data.push(d.light_percent);
+
+      if (chart.data.labels.length > 10) {
+        chart.data.labels.shift();
+        chart.data.datasets.forEach(ds => ds.data.shift());
+      }
+
+      chart.update();
+    });
+
+    /* ---------------- DATE & TIME ---------------- */
+    function updateDateTime() {
+      const now = new Date();
+      document.getElementById("date").innerText =
+        now.toLocaleDateString("en-IN");
+      document.getElementById("time").innerText =
+        now.toLocaleTimeString("en-IN");
+    }
+
+    setInterval(updateDateTime, 1000);
+    updateDateTime();
+
+    /* ---------------- DARK MODE ---------------- */
+    function toggleMode() {
+      document.body.classList.toggle("dark");
+    }
+
+    /* ---------------- LANGUAGE ---------------- */
+    let tamil = false;
+
+    function toggleLang() {
+      tamil = !tamil;
+
+      document.getElementById("j_title").innerText = tamil
+        ? "🌱 மல்லிகை வளர்ப்பு"
+        : "🌱 How to Grow Jasmine";
+
+      document.getElementById("j_content").innerText = tamil
+        ? "மல்லிகை செடி ஈரமான மண்ணிலும் நல்ல சூரிய ஒளியிலும் நன்றாக வளரும். இந்த IoT அமைப்பு செடியின் நிலையை நேரடியாக கண்காணிக்கிறது."
+        : "Jasmine grows well in moist soil with good sunlight. This IoT system monitors plant condition in real time.";
+    }
+  </script>
+
+</body>
+</html>
